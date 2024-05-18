@@ -57,7 +57,6 @@ func getTemperatureClient(baseURLStr string, apiToken string) *temperature.Clien
 }
 
 func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
-
 	log.Println("Post request received")
 
 	var requestBody RequestBody
@@ -77,7 +76,10 @@ func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bytes, err := json.Marshal(output)
+	writeJsonOutput(output, w)
+}
+func writeJsonOutput(object interface{}, w http.ResponseWriter) {
+	bytes, err := json.Marshal(object)
 	if err != nil {
 		log.Fatal(err)
 	}
