@@ -5,8 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/regismartiny/desafio-cloudrun/internal/viacep"
-	"github.com/regismartiny/desafio-cloudrun/internal/weatherapi"
+	"servico-b/internal/viacep"
+	"servico-b/internal/weatherapi"
+
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
 )

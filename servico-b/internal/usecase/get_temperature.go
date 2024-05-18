@@ -5,8 +5,8 @@ import (
 	"errors"
 	"log"
 
-	"github.com/regismartiny/desafio-cloudrun/internal/viacep"
-	"github.com/regismartiny/desafio-cloudrun/internal/weatherapi"
+	"servico-b/internal/viacep"
+	"servico-b/internal/weatherapi"
 )
 
 type GetTemperatureOutputDTO struct {
