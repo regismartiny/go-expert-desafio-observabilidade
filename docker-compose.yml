@@ -1,13 +1,13 @@
 version: "3"
 
 services:
-#   servico-a:
-#     container_name: servico-a
-#     build:
-#       context: ./servico-a
-#       dockerfile: ./Dockerfile
-#     ports:
-#       - 8070:8070
+  servico-a:
+    container_name: servico-a
+    build:
+      context: ./servico-a
+      dockerfile: ./Dockerfile
+    ports:
+      - 8070:8070
   servico-b:
     container_name: servico-b
     build:
