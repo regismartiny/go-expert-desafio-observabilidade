@@ -46,8 +46,6 @@ func NewGetTemperatureUseCase(
 func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, error) {
 	context := context.Background()
 
-	log.Println("Calling ViaCEP API for CEP:", input)
-
 	addressInfo, err := getViaCepAddressInfo(&context, c.ViaCepClient, input)
 
 	if err != nil {
@@ -56,8 +54,6 @@ func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, 
 
 	city := addressInfo.Localidade
 	log.Println("City: " + city)
-
-	log.Println("Calling Weather API for city:", city)
 
 	weatherInfo, err := getWeatherApiInfo(&context, c.WeatherApiClient, city)
 
@@ -79,7 +75,7 @@ func convertCelsiusToKelvin(celsius float64) float64 {
 }
 
 func getViaCepAddressInfo(ctx *context.Context, client ViaCepClient, cep string) (viacep.Address, error) {
-	log.Println("Searching for CEP info on ViaCEP API")
+	log.Println("Calling ViaCEP API for CEP:", cep)
 
 	adrressInfo, err := client.GetAddressInfo(ctx, cep)
 	if err != nil {
@@ -92,10 +88,10 @@ func getViaCepAddressInfo(ctx *context.Context, client ViaCepClient, cep string)
 	return adrressInfo, nil
 }
 
-func getWeatherApiInfo(ctx *context.Context, client WeatherApiClient, cidade string) (weatherapi.Weather, error) {
-	log.Println("Searching for weather info on Weather API")
+func getWeatherApiInfo(ctx *context.Context, client WeatherApiClient, city string) (weatherapi.Weather, error) {
+	log.Println("Calling Weather API for city:", city)
 
-	weatherInfo, err := client.GetWeatherInfo(ctx, cidade)
+	weatherInfo, err := client.GetWeatherInfo(ctx, city)
 	if err != nil {
 		log.Println(err)
 		return weatherapi.Weather{}, err

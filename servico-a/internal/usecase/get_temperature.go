@@ -47,11 +47,7 @@ func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, 
 		return GetTemperatureOutputDTO{}, errors.New("invalid zipcode")
 	}
 
-	log.Println("Calling Temperature API")
-
 	temperatureInfo, err := getTemperatureInfo(&context, c.TemperatureClient, input)
-
-	log.Println(temperatureInfo)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
@@ -71,6 +67,7 @@ func convertCelsiusToKelvin(celsius float64) float64 {
 }
 
 func getTemperatureInfo(ctx *context.Context, client TemperatureClient, cep string) (temperature.TemperatureInfo, error) {
+	log.Println("Calling Temperature API for CEP:", cep)
 
 	temperatureInfo, err := client.GetTemperatureInfo(ctx, cep)
 	if err != nil {
@@ -78,7 +75,7 @@ func getTemperatureInfo(ctx *context.Context, client TemperatureClient, cep stri
 		return temperature.TemperatureInfo{}, err
 	}
 
-	log.Println("Temperature info: ", temperatureInfo)
+	log.Println("Temperature info:", temperatureInfo)
 
 	return temperatureInfo, nil
 }

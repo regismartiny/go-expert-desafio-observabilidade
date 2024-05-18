@@ -18,6 +18,10 @@ type HandlerData struct {
 	GetTemperatureUseCase *usecase.GetTemperatureUseCase
 }
 
+type RequestBody struct {
+	Cep string `json:"cep"`
+}
+
 func main() {
 
 	config, _ := configs.LoadConfig(".")
@@ -52,10 +56,6 @@ func getTemperatureClient(baseURLStr string, apiToken string) *temperature.Clien
 	return temperature.NewClient(baseURL, apiToken)
 }
 
-type RequestBody struct {
-	Cep string `json:"cep"`
-}
-
 func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Post request received")
@@ -76,8 +76,6 @@ func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-
-	log.Println("Temperature info received: ", output)
 
 	bytes, err := json.Marshal(output)
 	if err != nil {
