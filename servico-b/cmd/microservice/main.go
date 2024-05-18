@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"time"
 
 	"servico-b/configs"
 
@@ -18,6 +19,8 @@ import (
 	"servico-b/internal/weatherapi"
 
 	otel "servico-b/internal/otel"
+
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 )
 
 type HandlerData struct {
@@ -25,37 +28,16 @@ type HandlerData struct {
 }
 
 func main() {
+	if err := run(); err != nil {
+		log.Fatalln(err)
+	}
+}
+
+func run() (err error) {
 	// Handle SIGINT (CTRL+C) gracefully.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
-	config, _ := configs.LoadConfig(".")
-
-	setupOpenTelemetry(ctx)
-
-	viaCepClient := getViaCepClient(config.ViaCepAPIBaseURL, config.ViaCepAPIToken)
-	weatherApiClient := getWeatherClient(config.WeatherAPIBaseURL, config.WeatherAPIToken)
-
-	h := &HandlerData{
-		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
-	}
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("GET /temperatura/{cep}", http.HandlerFunc(h.handleGet))
-
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: mux,
-	}
-
-	err := server.ListenAndServe()
-	if err != nil {
-		fmt.Println("Error:", err)
-	}
-}
-
-func setupOpenTelemetry(ctx context.Context) {
 	// Set up OpenTelemetry.
 	otelShutdown, err := otel.SetupOTelSDK(ctx)
 	if err != nil {
@@ -65,6 +47,61 @@ func setupOpenTelemetry(ctx context.Context) {
 	defer func() {
 		err = errors.Join(err, otelShutdown(context.Background()))
 	}()
+
+	// Start HTTP server.
+	srv := &http.Server{
+		Addr:         ":8080",
+		BaseContext:  func(_ net.Listener) context.Context { return ctx },
+		ReadTimeout:  time.Second,
+		WriteTimeout: 10 * time.Second,
+		Handler:      newHTTPHandler(),
+	}
+	srvErr := make(chan error, 1)
+	go func() {
+		srvErr <- srv.ListenAndServe()
+	}()
+
+	// Wait for interruption.
+	select {
+	case err = <-srvErr:
+		// Error when starting HTTP server.
+		return
+	case <-ctx.Done():
+		// Wait for first CTRL+C.
+		// Stop receiving signal notifications as soon as possible.
+		stop()
+	}
+
+	// When Shutdown is called, ListenAndServe immediately returns ErrServerClosed.
+	err = srv.Shutdown(context.Background())
+	return
+}
+
+func newHTTPHandler() http.Handler {
+	mux := http.NewServeMux()
+
+	// handleFunc is a replacement for mux.HandleFunc
+	// which enriches the handler's HTTP instrumentation with the pattern as the http.route.
+	handleFunc := func(pattern string, handlerFunc func(http.ResponseWriter, *http.Request)) {
+		// Configure the "http.route" for the HTTP instrumentation.
+		handler := otelhttp.WithRouteTag(pattern, http.HandlerFunc(handlerFunc))
+		mux.Handle(pattern, handler)
+	}
+
+	config, _ := configs.LoadConfig(".")
+	viaCepClient := getViaCepClient(config.ViaCepAPIBaseURL, config.ViaCepAPIToken)
+	weatherApiClient := getWeatherClient(config.WeatherAPIBaseURL, config.WeatherAPIToken)
+
+	h := &HandlerData{
+		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
+	}
+
+	// Register handlers.
+	handleFunc("GET /temperatura/{cep}", http.HandlerFunc(h.handleGet))
+
+	// Add HTTP instrumentation for the whole server.
+	handler := otelhttp.NewHandler(mux, "/")
+	return handler
 }
 
 func getViaCepClient(baseURLStr string, apiToken string) *viacep.Client {
