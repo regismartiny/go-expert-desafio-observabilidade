@@ -12,15 +12,6 @@ import (
 )
 
 // Mocks
-type CepValidatorMock struct {
-	mock.Mock
-}
-
-func (m *CepValidatorMock) IsCEP(cep string) bool {
-	args := m.Called(cep)
-	return args.Bool(0)
-}
-
 type ViaCepClientMock struct {
 	mock.Mock
 }
@@ -42,13 +33,11 @@ func (m *WeatherApiClientMock) GetWeatherInfo(ctx *context.Context, cidade strin
 // Tests
 type GetTemperatureUseCaseTestSuite struct {
 	suite.Suite
-	CepValidator     CepValidatorMock
 	ViaCepClient     ViaCepClientMock
 	WeatherApiClient WeatherApiClientMock
 }
 
 func (suite *GetTemperatureUseCaseTestSuite) SetupTest() {
-	suite.CepValidator = CepValidatorMock{}
 	suite.ViaCepClient = ViaCepClientMock{}
 	suite.WeatherApiClient = WeatherApiClientMock{}
 }
@@ -62,12 +51,11 @@ func (suite *GetTemperatureUseCaseTestSuite) TestGetTemperature_WhenValidCepProv
 	addressMock := viacep.Address{Localidade: "São Paulo"}
 	weatherMock := weatherapi.Weather{Current: weatherapi.Current{TempC: 20, TempF: 68}}
 
-	suite.CepValidator.On("IsCEP", "95770000").Return(true)
 	suite.ViaCepClient.On("GetAddressInfo", mock.Anything, "95770000").Return(addressMock, nil)
 	suite.WeatherApiClient.On("GetWeatherInfo", mock.Anything, "São Paulo").Return(weatherMock, nil)
 
 	// act
-	useCase := NewGetTemperatureUseCase(&suite.CepValidator, &suite.ViaCepClient, &suite.WeatherApiClient)
+	useCase := NewGetTemperatureUseCase(&suite.ViaCepClient, &suite.WeatherApiClient)
 	output, err := useCase.Execute("95770000")
 
 	// assert
@@ -78,30 +66,14 @@ func (suite *GetTemperatureUseCaseTestSuite) TestGetTemperature_WhenValidCepProv
 	suite.Equal(293.0, output.TempK)
 }
 
-func (suite *GetTemperatureUseCaseTestSuite) TestGetTemperature_WhenInvalidCepProvided_ThenShouldReturnErrorInvalidZipcode() {
-	// arrange
-	suite.CepValidator.On("IsCEP", "1234").Return(false)
-
-	// act
-	useCase := NewGetTemperatureUseCase(&suite.CepValidator, &suite.ViaCepClient, &suite.WeatherApiClient)
-	output, err := useCase.Execute("1234")
-
-	// assert
-	suite.NotNil(output)
-	suite.NotNil(err)
-	suite.Equal(GetTemperatureOutputDTO{}, output)
-	suite.Equal("invalid zipcode", err.Error())
-}
-
 func (suite *GetTemperatureUseCaseTestSuite) TestGetTemperature_WhenValidCepProvidedButNotFoundInViacep_ThenShouldReturnErrorCannotFindZipcode() {
 	// arrange
 	addressMock := viacep.Address{}
 
-	suite.CepValidator.On("IsCEP", "99999999").Return(true)
 	suite.ViaCepClient.On("GetAddressInfo", mock.Anything, "99999999").Return(addressMock, errors.New("can not find zipcode"))
 
 	// act
-	useCase := NewGetTemperatureUseCase(&suite.CepValidator, &suite.ViaCepClient, &suite.WeatherApiClient)
+	useCase := NewGetTemperatureUseCase(&suite.ViaCepClient, &suite.WeatherApiClient)
 	output, err := useCase.Execute("99999999")
 
 	// assert
@@ -116,12 +88,11 @@ func (suite *GetTemperatureUseCaseTestSuite) TestGetTemperature_WhenValidCepProv
 	addressMock := viacep.Address{Localidade: "São Paulo"}
 	weatherMock := weatherapi.Weather{}
 
-	suite.CepValidator.On("IsCEP", "99999999").Return(true)
 	suite.ViaCepClient.On("GetAddressInfo", mock.Anything, "99999999").Return(addressMock, nil)
 	suite.WeatherApiClient.On("GetWeatherInfo", mock.Anything, "São Paulo").Return(weatherMock, errors.New("can not find zipcode"))
 
 	// act
-	useCase := NewGetTemperatureUseCase(&suite.CepValidator, &suite.ViaCepClient, &suite.WeatherApiClient)
+	useCase := NewGetTemperatureUseCase(&suite.ViaCepClient, &suite.WeatherApiClient)
 	output, err := useCase.Execute("99999999")
 
 	// assert

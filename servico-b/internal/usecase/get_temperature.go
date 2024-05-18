@@ -10,6 +10,7 @@ import (
 )
 
 type GetTemperatureOutputDTO struct {
+	City  string  `json:"city"`   // Nome da Cidade
 	TempC float64 `json:"temp_C"` // Celsius
 	TempF float64 `json:"temp_F"` // Fahrenheit
 	TempK float64 `json:"temp_K"` // Kelvin
@@ -28,18 +29,15 @@ type WeatherApiClient interface {
 }
 
 type GetTemperatureUseCase struct {
-	CepValidator     CepValidator
 	ViaCepClient     ViaCepClient
 	WeatherApiClient WeatherApiClient
 }
 
 func NewGetTemperatureUseCase(
-	CepValidator CepValidator,
 	ViaCepClient ViaCepClient,
 	WeatherApiClient WeatherApiClient,
 ) *GetTemperatureUseCase {
 	return &GetTemperatureUseCase{
-		CepValidator:     CepValidator,
 		ViaCepClient:     ViaCepClient,
 		WeatherApiClient: WeatherApiClient,
 	}
@@ -47,10 +45,6 @@ func NewGetTemperatureUseCase(
 
 func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, error) {
 	context := context.Background()
-
-	if !c.CepValidator.IsCEP(input) {
-		return GetTemperatureOutputDTO{}, errors.New("invalid zipcode")
-	}
 
 	addressInfo, err := getViaCepAddressInfo(&context, c.ViaCepClient, input)
 
@@ -68,6 +62,7 @@ func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, 
 	}
 
 	return GetTemperatureOutputDTO{
+		City:  cidade,
 		TempC: weatherInfo.Current.TempC,
 		TempF: weatherInfo.Current.TempF,
 		TempK: convertCelsiusToKelvin(weatherInfo.Current.TempC),

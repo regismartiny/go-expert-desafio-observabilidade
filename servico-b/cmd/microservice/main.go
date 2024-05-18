@@ -9,7 +9,6 @@ import (
 
 	"github.com/regismartiny/desafio-cloudrun/configs"
 	"github.com/regismartiny/desafio-cloudrun/internal/usecase"
-	"github.com/regismartiny/desafio-cloudrun/internal/validators"
 	"github.com/regismartiny/desafio-cloudrun/internal/viacep"
 	"github.com/regismartiny/desafio-cloudrun/internal/weatherapi"
 )
@@ -22,12 +21,11 @@ func main() {
 
 	config, _ := configs.LoadConfig(".")
 
-	cepValidator := validators.NewCepValidator()
 	viaCepClient := getViaCepClient(config.ViaCepAPIBaseURL, config.ViaCepAPIToken)
 	weatherApiClient := getWeatherClient(config.WeatherAPIBaseURL, config.WeatherAPIToken)
 
 	h := &HandlerData{
-		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(cepValidator, viaCepClient, weatherApiClient),
+		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
 	}
 
 	mux := http.NewServeMux()
