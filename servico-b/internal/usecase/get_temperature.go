@@ -46,23 +46,27 @@ func NewGetTemperatureUseCase(
 func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, error) {
 	context := context.Background()
 
-	addressInfo, err := getViaCepAddressInfo(&context, c.ViaCepClient, input)
+	log.Println("Calling ViaCEP API for CEP:", input)
 
-	cidade := addressInfo.Localidade
-	log.Println("Cidade: " + cidade)
+	addressInfo, err := getViaCepAddressInfo(&context, c.ViaCepClient, input)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
 	}
 
-	weatherInfo, err := getWeatherApiInfo(&context, c.WeatherApiClient, cidade)
+	city := addressInfo.Localidade
+	log.Println("City: " + city)
+
+	log.Println("Calling Weather API for city:", city)
+
+	weatherInfo, err := getWeatherApiInfo(&context, c.WeatherApiClient, city)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
 	}
 
 	return GetTemperatureOutputDTO{
-		City:  cidade,
+		City:  city,
 		TempC: weatherInfo.Current.TempC,
 		TempF: weatherInfo.Current.TempF,
 		TempK: convertCelsiusToKelvin(weatherInfo.Current.TempC),

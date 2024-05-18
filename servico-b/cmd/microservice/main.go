@@ -61,6 +61,8 @@ func getWeatherClient(baseURLStr string, apiToken string) *weatherapi.Client {
 
 func (h *HandlerData) handleGet(w http.ResponseWriter, r *http.Request) {
 
+	log.Println("Request received")
+
 	cep := r.PathValue("cep")
 
 	output, err := h.GetTemperatureUseCase.Execute(cep)
