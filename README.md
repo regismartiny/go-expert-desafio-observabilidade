@@ -1,5 +1,5 @@
 # go-expert-desafio-observabilidade
-Desafio 5 da pós gradução FullCycle Go Expert
+Desafio 5 da Pós-graduação Full Cycle Go Expert
 
 ## Enunciado do desafio
 
