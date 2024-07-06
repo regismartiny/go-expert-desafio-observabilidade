@@ -65,6 +65,10 @@ Após a implementação dos serviços, adicione a implementação do OTEL + Zipk
 ### Execução local via Docker
 
 ```bash
-docker-compose up
+docker-compose up --build
 ````
+
+### Visualização de traces - Zipkin
+
+Acesse http://localhost:9411
 

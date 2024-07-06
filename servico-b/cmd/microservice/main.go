@@ -14,16 +14,18 @@ import (
 
 	"servico-b/configs"
 
+	"servico-b/internal/telemetry"
 	"servico-b/internal/usecase"
 	"servico-b/internal/viacep"
 	"servico-b/internal/weatherapi"
 
-	otel "servico-b/internal/otel"
-
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type HandlerData struct {
+	tracer                *trace.Tracer
 	GetTemperatureUseCase *usecase.GetTemperatureUseCase
 }
 
@@ -39,7 +41,7 @@ func run() (err error) {
 	defer stop()
 
 	// Set up OpenTelemetry.
-	otelShutdown, err := otel.SetupOTelSDK(ctx)
+	otelShutdown, err := telemetry.SetupOTelSDK(ctx, "servico-b")
 	if err != nil {
 		return
 	}
@@ -48,13 +50,29 @@ func run() (err error) {
 		err = errors.Join(err, otelShutdown(context.Background()))
 	}()
 
+	tracer := otel.Tracer("servico-b")
+
+	mux := http.NewServeMux()
+
+	config, _ := configs.LoadConfig(".")
+	viaCepClient := getViaCepClient(config.ViaCepAPIBaseURL, config.ViaCepAPIToken)
+	weatherApiClient := getWeatherClient(config.WeatherAPIBaseURL, config.WeatherAPIToken)
+
+	h := &HandlerData{
+		tracer:                &tracer,
+		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
+	}
+
+	// Register handlers.
+	mux.Handle("GET /temperatura/{cep}", http.HandlerFunc(h.handleGet))
+
 	// Start HTTP server.
 	srv := &http.Server{
 		Addr:         ":8080",
 		BaseContext:  func(_ net.Listener) context.Context { return ctx },
 		ReadTimeout:  time.Second,
 		WriteTimeout: 10 * time.Second,
-		Handler:      newHTTPHandler(),
+		Handler:      mux,
 	}
 	srvErr := make(chan error, 1)
 	go func() {
@@ -77,33 +95,6 @@ func run() (err error) {
 	return
 }
 
-func newHTTPHandler() http.Handler {
-	mux := http.NewServeMux()
-
-	// handleFunc is a replacement for mux.HandleFunc
-	// which enriches the handler's HTTP instrumentation with the pattern as the http.route.
-	handleFunc := func(pattern string, handlerFunc func(http.ResponseWriter, *http.Request)) {
-		// Configure the "http.route" for the HTTP instrumentation.
-		handler := otelhttp.WithRouteTag(pattern, http.HandlerFunc(handlerFunc))
-		mux.Handle(pattern, handler)
-	}
-
-	config, _ := configs.LoadConfig(".")
-	viaCepClient := getViaCepClient(config.ViaCepAPIBaseURL, config.ViaCepAPIToken)
-	weatherApiClient := getWeatherClient(config.WeatherAPIBaseURL, config.WeatherAPIToken)
-
-	h := &HandlerData{
-		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
-	}
-
-	// Register handlers.
-	handleFunc("GET /temperatura/{cep}", http.HandlerFunc(h.handleGet))
-
-	// Add HTTP instrumentation for the whole server.
-	handler := otelhttp.NewHandler(mux, "/")
-	return handler
-}
-
 func getViaCepClient(baseURLStr string, apiToken string) *viacep.Client {
 	baseURL, err := url.Parse(baseURLStr)
 	if err != nil {
@@ -124,9 +115,17 @@ func (h *HandlerData) handleGet(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Request received")
 
+	carrier := propagation.HeaderCarrier(r.Header)
+	ctx := r.Context()
+	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
+
+	tracer := *h.tracer
+	ctx, span := tracer.Start(ctx, "servico-b")
+	defer span.End()
+
 	cep := r.PathValue("cep")
 
-	output, err := h.GetTemperatureUseCase.Execute(cep)
+	output, err := h.GetTemperatureUseCase.Execute(&ctx, cep)
 	if err != nil {
 		statusCode := getStatusCode(err.Error())
 

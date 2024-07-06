@@ -1,20 +1,29 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
 
 	"servico-a/configs"
+	"servico-a/internal/telemetry"
 	temperature "servico-a/internal/temperature"
 	"servico-a/internal/usecase"
 	"servico-a/internal/validators"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type HandlerData struct {
+	tracer                *trace.Tracer
 	GetTemperatureUseCase *usecase.GetTemperatureUseCase
 }
 
@@ -26,10 +35,27 @@ func main() {
 
 	config, _ := configs.LoadConfig(".")
 
+	// Handle SIGINT (CTRL+C) gracefully.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	// Set up OpenTelemetry.
+	otelShutdown, err := telemetry.SetupOTelSDK(ctx, "servico-a")
+	if err != nil {
+		return
+	}
+	// Handle shutdown properly so nothing leaks.
+	defer func() {
+		err = errors.Join(err, otelShutdown(context.Background()))
+	}()
+
+	tracer := otel.Tracer("servico-a")
+
 	cepValidator := validators.NewCepValidator()
-	temperatureClient := getTemperatureClient(config.TemperatureAPIBaseURL, config.TemperatureAPIToken)
+	temperatureClient := getTemperatureClient(&tracer, config.TemperatureAPIBaseURL, config.TemperatureAPIToken)
 
 	h := &HandlerData{
+		tracer:                &tracer,
 		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(cepValidator, temperatureClient),
 	}
 
@@ -38,26 +64,46 @@ func main() {
 	mux.HandleFunc("POST /", http.HandlerFunc(h.handlePost))
 
 	server := &http.Server{
-		Addr:    ":8070",
-		Handler: mux,
+		Addr:        ":8070",
+		BaseContext: func(_ net.Listener) context.Context { return ctx },
+		Handler:     mux,
 	}
 
-	err := server.ListenAndServe()
-	if err != nil {
-		fmt.Println("Error:", err)
+	srvErr := make(chan error, 1)
+	go func() {
+		srvErr <- server.ListenAndServe()
+	}()
+
+	// Wait for interruption.
+	select {
+	case err = <-srvErr:
+		// Error when starting HTTP server.
+		return
+	case <-ctx.Done():
+		// Wait for first CTRL+C.
+		// Stop receiving signal notifications as soon as possible.
+		stop()
 	}
+
+	// When Shutdown is called, ListenAndServe immediately returns ErrServerClosed.
+	err = server.Shutdown(context.Background())
 }
 
-func getTemperatureClient(baseURLStr string, apiToken string) *temperature.Client {
+func getTemperatureClient(tracer *trace.Tracer, baseURLStr string, apiToken string) *temperature.Client {
 	baseURL, err := url.Parse(baseURLStr)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return temperature.NewClient(baseURL, apiToken)
+	return temperature.NewClient(tracer, baseURL, apiToken)
 }
 
 func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 	log.Println("Post request received")
+
+	ctx := r.Context()
+	tracer := *h.tracer
+	ctx, span := tracer.Start(ctx, "servico-a")
+	defer span.End()
 
 	var requestBody RequestBody
 
@@ -67,7 +113,7 @@ func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	output, err := h.GetTemperatureUseCase.Execute(requestBody.Cep)
+	output, err := h.GetTemperatureUseCase.Execute(&ctx, requestBody.Cep)
 	if err != nil {
 		statusCode := getStatusCode(err.Error())
 

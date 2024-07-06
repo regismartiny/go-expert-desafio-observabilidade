@@ -7,6 +7,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -14,6 +18,7 @@ var (
 )
 
 type Client struct {
+	tracer  *trace.Tracer
 	BaseURL *url.URL
 	apiKey  string
 }
@@ -23,8 +28,9 @@ type errorResponse struct {
 	Message string `json:"message"`
 }
 
-func NewClient(baseUrl *url.URL, apiKey string) *Client {
+func NewClient(tracer *trace.Tracer, baseUrl *url.URL, apiKey string) *Client {
 	return &Client{
+		tracer:  tracer,
 		BaseURL: baseUrl,
 		apiKey:  apiKey,
 	}
@@ -65,6 +71,7 @@ func (c *Client) GetTemperatureInfo(ctx *context.Context, cep string) (Temperatu
 	url := fmt.Sprintf("%s/%s", c.BaseURL, cep)
 
 	req, err := http.NewRequestWithContext(*ctx, "GET", url, nil)
+	otel.GetTextMapPropagator().Inject(*ctx, propagation.HeaderCarrier(req.Header))
 	if err != nil {
 		return TemperatureInfo{}, err
 	}

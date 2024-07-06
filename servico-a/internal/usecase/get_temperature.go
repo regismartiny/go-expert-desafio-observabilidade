@@ -38,8 +38,7 @@ func NewGetTemperatureUseCase(
 	}
 }
 
-func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, error) {
-	context := context.Background()
+func (c *GetTemperatureUseCase) Execute(context *context.Context, input string) (GetTemperatureOutputDTO, error) {
 
 	log.Println("Validating CEP", input)
 
@@ -47,7 +46,7 @@ func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, 
 		return GetTemperatureOutputDTO{}, errors.New("invalid zipcode")
 	}
 
-	temperatureInfo, err := getTemperatureInfo(&context, c.TemperatureClient, input)
+	temperatureInfo, err := getTemperatureInfo(context, c.TemperatureClient, input)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")

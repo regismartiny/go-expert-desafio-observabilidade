@@ -43,10 +43,9 @@ func NewGetTemperatureUseCase(
 	}
 }
 
-func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, error) {
-	context := context.Background()
+func (c *GetTemperatureUseCase) Execute(context *context.Context, input string) (GetTemperatureOutputDTO, error) {
 
-	addressInfo, err := getViaCepAddressInfo(&context, c.ViaCepClient, input)
+	addressInfo, err := getViaCepAddressInfo(context, c.ViaCepClient, input)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
@@ -55,7 +54,7 @@ func (c *GetTemperatureUseCase) Execute(input string) (GetTemperatureOutputDTO, 
 	city := addressInfo.Localidade
 	log.Println("City: " + city)
 
-	weatherInfo, err := getWeatherApiInfo(&context, c.WeatherApiClient, city)
+	weatherInfo, err := getWeatherApiInfo(context, c.WeatherApiClient, city)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
