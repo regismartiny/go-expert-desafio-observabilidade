@@ -102,7 +102,7 @@ func (h *HandlerData) handlePost(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 	tracer := *h.tracer
-	ctx, span := tracer.Start(ctx, "servico-a")
+	ctx, span := tracer.Start(ctx, "get-temperature")
 	defer span.End()
 
 	var requestBody RequestBody

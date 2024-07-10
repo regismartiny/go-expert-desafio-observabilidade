@@ -7,6 +7,8 @@ import (
 
 	"servico-b/internal/viacep"
 	"servico-b/internal/weatherapi"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 type GetTemperatureOutputDTO struct {
@@ -29,15 +31,18 @@ type WeatherApiClient interface {
 }
 
 type GetTemperatureUseCase struct {
+	tracer           *trace.Tracer
 	ViaCepClient     ViaCepClient
 	WeatherApiClient WeatherApiClient
 }
 
 func NewGetTemperatureUseCase(
+	tracer *trace.Tracer,
 	ViaCepClient ViaCepClient,
 	WeatherApiClient WeatherApiClient,
 ) *GetTemperatureUseCase {
 	return &GetTemperatureUseCase{
+		tracer:           tracer,
 		ViaCepClient:     ViaCepClient,
 		WeatherApiClient: WeatherApiClient,
 	}
@@ -45,20 +50,29 @@ func NewGetTemperatureUseCase(
 
 func (c *GetTemperatureUseCase) Execute(context *context.Context, input string) (GetTemperatureOutputDTO, error) {
 
-	addressInfo, err := getViaCepAddressInfo(context, c.ViaCepClient, input)
+	tracer := *c.tracer
+	ctx, spanCep := tracer.Start(*context, "get-cep-info")
+
+	addressInfo, err := getViaCepAddressInfo(&ctx, c.ViaCepClient, input)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
 	}
+
+	spanCep.End()
 
 	city := addressInfo.Localidade
 	log.Println("City: " + city)
 
-	weatherInfo, err := getWeatherApiInfo(context, c.WeatherApiClient, city)
+	ctx, spanWeather := tracer.Start(*context, "get-weather-info")
+
+	weatherInfo, err := getWeatherApiInfo(&ctx, c.WeatherApiClient, city)
 
 	if err != nil {
 		return GetTemperatureOutputDTO{}, errors.New("can not find zipcode")
 	}
+
+	spanWeather.End()
 
 	return GetTemperatureOutputDTO{
 		City:  city,

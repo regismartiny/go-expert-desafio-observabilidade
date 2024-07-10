@@ -60,7 +60,7 @@ func run() (err error) {
 
 	h := &HandlerData{
 		tracer:                &tracer,
-		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(viaCepClient, weatherApiClient),
+		GetTemperatureUseCase: usecase.NewGetTemperatureUseCase(&tracer, viaCepClient, weatherApiClient),
 	}
 
 	// Register handlers.
@@ -120,7 +120,7 @@ func (h *HandlerData) handleGet(w http.ResponseWriter, r *http.Request) {
 	ctx = otel.GetTextMapPropagator().Extract(ctx, carrier)
 
 	tracer := *h.tracer
-	ctx, span := tracer.Start(ctx, "servico-b")
+	ctx, span := tracer.Start(ctx, "get-temperature")
 	defer span.End()
 
 	cep := r.PathValue("cep")
